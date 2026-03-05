@@ -762,14 +762,18 @@ spec:
       securityContext:
         runAsUser: 0
       initContainers:
-      - name: wait-for-pr-prometheus
+      - name: sync-with-pr-prometheus
         image: quay.io/prometheus/busybox:latest
         imagePullPolicy: Always
         command:
         - /bin/sh
         - -c
         - |
-          until wget -qO- http://prometheus-test-pr-{{ .PR_NUMBER }}/{{ .PR_NUMBER }}/prometheus-pr/-/ready; do
+          nc -l -p 9099 </dev/null >/dev/null && touch /tmp/peer-ready &
+          until nc -w1 prometheus-test-pr-{{ .PR_NUMBER }} 9099 </dev/null >/dev/null 2>&1; do
+            sleep 1
+          done
+          until [ -f /tmp/peer-ready ]; do
             sleep 1
           done
       containers:
@@ -821,6 +825,9 @@ spec:
   - name: prom-web
     port: 80
     targetPort: prom-web
+  - name: sync
+    port: 9099
+    targetPort: 9099
   selector:
     app: prometheus
     prometheus: test-{{ normalise .RELEASE }}
